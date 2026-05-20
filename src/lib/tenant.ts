@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import db from './db'
 
 const tenantCache = new Map<string, { id: string; slug: string }>()
 
@@ -8,17 +8,10 @@ export async function resolveTenant(slug: string): Promise<{ id: string; slug: s
   }
 
   try {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('tenants')
-      .select('id, slug')
-      .eq('slug', slug)
-      .single()
-
-    if (error || !data) return null
-
-    tenantCache.set(slug, data)
-    return data
+    const row = db.prepare('SELECT id, slug FROM tenants WHERE slug = ?').get(slug) as { id: string; slug: string } | undefined
+    if (!row) return null
+    tenantCache.set(slug, row)
+    return row
   } catch {
     return null
   }

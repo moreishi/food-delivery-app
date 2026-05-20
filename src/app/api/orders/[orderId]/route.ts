@@ -1,40 +1,62 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getOrderByIdWithItems, updateOrderStatus } from '@/lib/local-data'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   const { orderId } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const session = await getCurrentUser()
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('*, order_items(*)')
-    .eq('id', orderId)
-    .single()
-
-  if (error || !order) {
+  const order = getOrderByIdWithItems(orderId) as Record<string, unknown> | null
+  if (!order) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
 
-  // Only allow customer or staff of the tenant to view
-  if (order.customer_id !== user.id) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, tenant_id')
-      .eq('id', user.id)
-      .single()
+  // Only allow customer, staff of the tenant, or admin to view
+  if (order.customer_id !== session.user.id) {
+    const { getProfileById } = await import('@/lib/local-data')
+    const profile = getProfileById(session.user.id)
 
-    if (!profile || (profile.role !== 'staff' && profile.role !== 'admin') || profile.tenant_id !== order.tenant_id) {
+    if (!profile || ((profile.role as string) !== 'staff' && (profile.role as string) !== 'admin') ||
+        (profile.tenant_id && profile.tenant_id !== order.tenant_id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
 
   return NextResponse.json(order)
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ orderId: string }> }
+) {
+  const { orderId } = await params
+  const session = await getCurrentUser()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Only staff of the order's tenant or admin can update
+  const order = getOrderByIdWithItems(orderId) as Record<string, unknown> | null
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  }
+
+  if (session.user.role !== 'admin') {
+    const { getProfileById, getOrderById } = await import('@/lib/local-data')
+    const profile = getProfileById(session.user.id)
+    if (!profile || ((profile.role as string) !== 'staff') ||
+        (profile.tenant_id !== order.tenant_id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
+  const { status } = await request.json()
+  updateOrderStatus(orderId, status)
+
+  return NextResponse.json({ success: true })
 }

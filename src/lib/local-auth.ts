@@ -62,3 +62,13 @@ export function getLocalUserById(id: string): LocalUser | null {
   if (!row) return null
   return { id: row.id, email: row.email, name: row.name, role: row.role, tenant_id: row.tenant_id }
 }
+
+export function updateLocalUser(userId: string, updates: { role?: string; tenant_id?: string | null }): LocalUser | null {
+  if (updates.role !== undefined) {
+    db.prepare('UPDATE profiles SET role = ? WHERE id = ?').run(updates.role, userId)
+  }
+  if (updates.tenant_id !== undefined) {
+    db.prepare('UPDATE profiles SET tenant_id = ? WHERE id = ?').run(updates.tenant_id, userId)
+  }
+  return getLocalUserById(userId)
+}

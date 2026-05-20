@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const sessionCookie = request.cookies.get('local-session')
   let user: { id: string; role: string; tenant_id: string | null } | null = null
@@ -16,6 +16,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // === AUTH ROUTES === redirect authenticated users away
+  if (pathname.startsWith('/auth') && user) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
   // === DASHBOARD ROUTES ===
   if (pathname.startsWith('/dashboard')) {
     if (!user) {
@@ -24,6 +29,11 @@ export async function middleware(request: NextRequest) {
 
     if (user.role !== 'staff' && user.role !== 'admin') {
       return NextResponse.redirect(new URL('/403', request.url))
+    }
+
+    // Redirect staff without a tenant to onboarding
+    if (user.role === 'staff' && !user.tenant_id) {
+      return NextResponse.redirect(new URL('/onboarding', request.url))
     }
 
     const requestHeaders = new Headers(request.headers)
@@ -53,5 +63,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/onboarding', '/auth/:path*'],
 }

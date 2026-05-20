@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { getMenuItemById, getTenantBySlug } from '@/lib/local-data'
 import { ItemDetail } from '@/components/customer/item-detail'
 
 export default async function ItemPage({
@@ -8,15 +8,11 @@ export default async function ItemPage({
   params: Promise<{ slug: string; itemId: string }>
 }) {
   const { slug, itemId } = await params
-  const supabase = await createClient()
+  const tenant = getTenantBySlug(slug)
+  if (!tenant) notFound()
 
-  const { data: item } = await supabase
-    .from('menu_items')
-    .select('*, tenants!inner(name, slug)')
-    .eq('id', itemId)
-    .single()
-
+  const item = getMenuItemById(itemId)
   if (!item) notFound()
 
-  return <ItemDetail item={item} tenantSlug={slug} />
+  return <ItemDetail item={{ ...item, tenants: { name: tenant.name, slug: tenant.slug } } as any} tenantSlug={slug} />
 }

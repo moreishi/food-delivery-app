@@ -111,5 +111,9 @@ export function migrate() {
     );
   `)
 
+  // Non-breaking additions for multi-tenant
+  try { db.exec('ALTER TABLE tenants ADD COLUMN owner_id TEXT REFERENCES profiles(id) ON DELETE SET NULL') } catch {}
+  try { db.exec('ALTER TABLE tenants ADD COLUMN owner_name TEXT') } catch {}
+
   console.log('Migration applied successfully')
 }

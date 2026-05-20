@@ -62,9 +62,9 @@ export function seed() {
     const tenantId = randomUUID()
 
     db.prepare(`
-      INSERT INTO tenants (id, slug, name, description, phone, is_active)
-      VALUES (?, ?, ?, ?, ?, 1)
-    `).run(tenantId, tenant.slug, tenant.name, tenant.description, tenant.phone)
+      INSERT INTO tenants (id, slug, name, description, phone, is_active, owner_name)
+      VALUES (?, ?, ?, ?, ?, 1, ?)
+    `).run(tenantId, tenant.slug, tenant.name, tenant.description, tenant.phone, 'Seeded')
 
     // Create categories
     const categoryMap = new Map<string, string>()
@@ -99,7 +99,7 @@ export function seed() {
   // Seed demo users
   const demoUsers = [
     { email: 'admin@example.com', password: 'password', name: 'Admin User', role: 'admin', tenantId: null },
-    { email: 'staff@pizzahub.com', password: 'password', name: 'Pizza Hub Staff', role: 'staff', tenantId: db.prepare('SELECT id FROM tenants WHERE slug = ?').get('pizzahub')?.id },
+    { email: 'staff@pizzahub.com', password: 'password', name: 'Pizza Hub Staff', role: 'staff', tenantId: (db.prepare('SELECT id FROM tenants WHERE slug = ?').get('pizzahub') as { id: string } | undefined)?.id },
     { email: 'customer@example.com', password: 'password', name: 'Test Customer', role: 'customer', tenantId: null },
   ]
 

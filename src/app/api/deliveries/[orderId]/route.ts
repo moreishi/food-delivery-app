@@ -1,28 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, upsertDelivery, updateDeliveryLocation } from '@/lib/local-data'
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   const { orderId } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getCurrentUser()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { status } = await _request.json()
 
-  const { data: delivery, error } = await supabase
-    .from('deliveries')
-    .upsert({
-      order_id: orderId,
-      driver_id: user.id,
-      status: status || 'assigned',
-    })
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const delivery = upsertDelivery(orderId, session.user.id, status || 'assigned')
   return NextResponse.json(delivery)
 }
 
@@ -31,19 +20,11 @@ export async function PATCH(
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   const { orderId } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getCurrentUser()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { location } = await request.json()
+  updateDeliveryLocation(orderId, location)
 
-  const { data, error } = await supabase
-    .from('deliveries')
-    .update({ location, updated_at: new Date().toISOString() })
-    .eq('order_id', orderId)
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  return NextResponse.json({ success: true })
 }
