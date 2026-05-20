@@ -1,5 +1,6 @@
 import db from '../lib/db'
 import { migrate } from '../lib/migrate'
+import { createLocalUser } from '../lib/local-auth'
 import { randomUUID } from 'crypto'
 
 export const SAMPLE_TENANTS = [
@@ -94,6 +95,28 @@ export function seed() {
   console.log('\nSample tenants:')
   console.log('  Pizza Hub  → /menu/pizzahub')
   console.log('  Burger Bros → /menu/burger-bros')
+
+  // Seed demo users
+  const demoUsers = [
+    { email: 'admin@example.com', password: 'password', name: 'Admin User', role: 'admin', tenantId: null },
+    { email: 'staff@pizzahub.com', password: 'password', name: 'Pizza Hub Staff', role: 'staff', tenantId: db.prepare('SELECT id FROM tenants WHERE slug = ?').get('pizzahub')?.id },
+    { email: 'customer@example.com', password: 'password', name: 'Test Customer', role: 'customer', tenantId: null },
+  ]
+
+  for (const u of demoUsers) {
+    const existing = db.prepare('SELECT id FROM auth_users WHERE email = ?').get(u.email)
+    if (existing) {
+      console.log(`User "${u.email}" already exists, skipping`)
+      continue
+    }
+    createLocalUser(u.email, u.password, u.name, u.role, u.tenantId)
+    console.log(`Created user: ${u.email} (${u.role})`)
+  }
+
+  console.log('\nDemo accounts:')
+  console.log('  Admin:    admin@example.com / password')
+  console.log('  Staff:    staff@pizzahub.com / password')
+  console.log('  Customer: customer@example.com / password')
 }
 
 // Run directly

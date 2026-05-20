@@ -1,12 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AuthForm } from '@/components/shared/auth-form'
 
 export default async function LoginPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const cookieStore = await cookies()
+  const session = cookieStore.get('local-session')
 
-  if (user) redirect('/')
+  if (session?.value) {
+    redirect('/')
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center">

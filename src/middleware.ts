@@ -1,36 +1,16 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const sessionCookie = request.cookies.get('local-session')
+  let user: { id: string; role: string; tenant_id: string | null } | null = null
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-        },
-      },
+  if (sessionCookie?.value) {
+    try {
+      user = JSON.parse(sessionCookie.value)
+    } catch {
+      // Invalid session
     }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Helper: get user profile
-  async function getProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('role, tenant_id')
-      .eq('id', userId)
-      .single()
-    return data
   }
 
   // === DASHBOARD ROUTES ===
@@ -39,13 +19,14 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
-    const profile = await getProfile(user.id)
-    if (!profile || profile.role !== 'staff') {
+    if (user.role !== 'staff' && user.role !== 'admin') {
       return NextResponse.redirect(new URL('/403', request.url))
     }
 
     const requestHeaders = new Headers(request.headers)
-    requestHeaders.set('x-tenant-id', profile.tenant_id || '')
+    requestHeaders.set('x-tenant-id', user.tenant_id || '')
+    requestHeaders.set('x-user-id', user.id)
+    requestHeaders.set('x-user-role', user.role)
     return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
@@ -55,13 +36,17 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/login', request.url))
     }
 
-    const profile = await getProfile(user.id)
-    if (!profile || profile.role !== 'admin') {
+    if (user.role !== 'admin') {
       return NextResponse.redirect(new URL('/403', request.url))
     }
   }
 
-  return NextResponse.next()
+  const requestHeaders = new Headers(request.headers)
+  if (user) {
+    requestHeaders.set('x-user-id', user.id)
+    requestHeaders.set('x-user-role', user.role)
+  }
+  return NextResponse.next({ request: { headers: requestHeaders } })
 }
 
 export const config = {

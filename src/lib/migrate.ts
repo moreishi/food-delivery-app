@@ -2,6 +2,13 @@ import db from './db'
 
 export function migrate() {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS tenants (
       id TEXT PRIMARY KEY,
       slug TEXT UNIQUE NOT NULL,
