@@ -2,6 +2,7 @@ import db from '../lib/db'
 import { migrate } from '../lib/migrate'
 import { createLocalUser } from '../lib/local-auth'
 import { randomUUID } from 'crypto'
+import { seedFilipinoTenants } from './filipino-tenants'
 
 export const SAMPLE_TENANTS = [
   {
@@ -95,6 +96,10 @@ export function seed() {
   console.log('\nSample tenants:')
   console.log('  Pizza Hub  → /menu/pizzahub')
   console.log('  Burger Bros → /menu/burger-bros')
+
+  // Seed Filipino cuisine tenants
+  console.log('\n--- Seeding Filipino Cuisine Tenants ---')
+  seedFilipinoTenants()
 
   // Seed demo users
   const demoUsers = [
