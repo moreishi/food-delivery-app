@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:prod": "next build"
+    "build:prod": "next build",
+    "seed": "npx tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
