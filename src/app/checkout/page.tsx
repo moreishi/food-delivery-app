@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { formatPrice } from '@/lib/utils'
-import { ShoppingBag, Trash2, Minus, Plus } from 'lucide-react'
+import { ShoppingBag, Trash2, Minus, Plus, CreditCard } from 'lucide-react'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -18,52 +18,74 @@ export default function CheckoutPage() {
   const { totalItems, totalPrice } = getCartTotals(items)
   const [address, setAddress] = useState({ street: '', city: '', notes: '' })
   const [loading, setLoading] = useState(false)
+  const [paypalLoading, setPaypalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Group items by tenant
   const tenantId = items[0]?.tenantId
-  const tenantSlug = items[0]?.tenantSlug
+  const subtotal = totalPrice
+  const deliveryFee = 500
+  const tax = Math.round(subtotal * 0.12)
+  const total = subtotal + deliveryFee + tax
 
-  async function handlePlaceOrder() {
+  async function createOrder() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/auth/login')
+      return null
+    }
+
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId, items, deliveryAddress: address, subtotal, deliveryFee, tax, total }),
+    })
+
+    const order = await res.json()
+    if (!res.ok) throw new Error(order.error || 'Failed to create order')
+    return order
+  }
+
+  async function handlePayPal() {
     if (!address.street || !address.city) {
       setError('Please fill in your delivery address')
       return
     }
+    setPaypalLoading(true)
+    setError(null)
 
+    try {
+      const order = await createOrder()
+      if (!order) return
+
+      // Create PayPal order
+      const paypalRes = await fetch('/api/paypal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ total }),
+      })
+      const paypalData = await paypalRes.json()
+      if (!paypalRes.ok) throw new Error(paypalData.error)
+
+      // Redirect to PayPal approval
+      window.location.href = `https://www.paypal.com/checkoutnow?token=${paypalData.id}`
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'PayPal failed')
+    } finally {
+      setPaypalLoading(false)
+    }
+  }
+
+  async function handleStripe() {
+    if (!address.street || !address.city) {
+      setError('Please fill in your delivery address')
+      return
+    }
     setLoading(true)
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
-      const subtotal = totalPrice
-      const deliveryFee = 500
-      const tax = Math.round(subtotal * 0.12)
-      const total = subtotal + deliveryFee + tax
-
-      // Create order via API
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId,
-          items,
-          deliveryAddress: address,
-          subtotal,
-          deliveryFee,
-          tax,
-          total,
-        }),
-      })
-
-      const order = await res.json()
-      if (!res.ok) throw new Error(order.error || 'Failed to create order')
-
-      // Redirect to payment page
+      const order = await createOrder()
+      if (!order) return
       router.push(`/order/${order.id}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -166,9 +188,14 @@ export default function CheckoutPage() {
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
-        <Button className="w-full" size="lg" onClick={handlePlaceOrder} disabled={loading}>
-          {loading ? 'Placing Order...' : `Place Order — ${formatPrice(totalPrice + 500 + Math.round(totalPrice * 0.12))}`}
-        </Button>
+        <div className="flex flex-col gap-3">
+          <Button className="w-full" size="lg" onClick={handleStripe} disabled={loading}>
+            {loading ? 'Processing...' : `Pay with Card — ${formatPrice(total)}`}
+          </Button>
+          <Button variant="outline" className="w-full" size="lg" onClick={handlePayPal} disabled={paypalLoading}>
+            {paypalLoading ? 'Redirecting to PayPal...' : `Pay with PayPal — ${formatPrice(total)}`}
+          </Button>
+        </div>
       </div>
     </div>
   )
