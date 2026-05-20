@@ -5,11 +5,14 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('local-session')
   let user: { id: string; role: string; tenant_id: string | null } | null = null
 
-  if (sessionCookie?.value) {
+  if (sessionCookie?.value && sessionCookie.value.length > 0) {
     try {
-      user = JSON.parse(sessionCookie.value)
+      const parsed = JSON.parse(sessionCookie.value)
+      if (parsed && parsed.id) {
+        user = parsed
+      }
     } catch {
-      // Invalid session
+      // Invalid or empty session cookie — ignore
     }
   }
 
